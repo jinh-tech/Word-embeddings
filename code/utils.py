@@ -27,6 +27,7 @@ def sp_uttkrp(vals, subs, m, U):
         Matrix which is the result of the matrix product of the unfolding of
         the tensor and the Khatri-Rao product of `U`.
     """
+
     D, K = U[m].shape
     out = np.zeros_like(U[m])
     for k in xrange(K):
@@ -110,27 +111,12 @@ def parafac(matrices, axis=None):
         return np.einsum(s, tmp, matrices[-1])
 
 
-def serialize_bptf(model, out_dir, num=None, desc=None):
-    if desc is None:
-        desc = 'model'
+def serialize_bptf(model, out_dir, desc=None):
     out_dir = path(out_dir)
     assert out_dir.exists()
 
-    if num is None:
-        sleep(rn.random() * 5)
-        curr_files = out_dir.files('*_%s.npz' % desc)
-        curr_nums = [int(f.namebase.split('_')[0]) for f in curr_files]
-        num = max(curr_nums + [0]) + 1
-
-    with open(out_dir.joinpath('%d_%s.dat' % (num, desc)), 'wb') as f:
-        pickle.dump(model.get_params(), f)
-
-    out_path = out_dir.joinpath('%d_%s.npz' % (num, desc))
+    out_path = out_dir.joinpath('%s.npz' %(desc))
     np.savez(out_path,
              E_DK_M=model.E_DK_M,
-             G_DK_M=model.G_DK_M,
-             gamma_DK_M=model.gamma_DK_M,
-             delta_DK_M=model.delta_DK_M,
-             beta_M=model.beta_M)
+             G_DK_M=model.G_DK_M)
     print out_path
-    return num
