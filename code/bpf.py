@@ -122,8 +122,8 @@ class BPTF(BaseEstimator, TransformerMixin):
                 print 'ITERATION %d:    Time: %f   Objective: %.2f    Change: %.5f'% (itn, e, bound, delta)
 
             curr_elbo = bound
-            # if delta < self.tol:
-            #     break
+            #if delta < self.tol:
+            #    break
 
     def fit(self, data,test_times=None,orig_data=None,mask_no=None,bool_test=False):
         assert data.ndim == self.n_modes
@@ -149,17 +149,23 @@ def main():
     p.add_argument('-o', '--out', type=path, required=True)
     p.add_argument('-k', '--n_components', type=int, required=True)
     p.add_argument('-n', '--max_iter', type=int, default=200)
-    p.add_argument('-t', '--tol', type=float, default=1e-4)
+    p.add_argument('-t', '--tol', type=float, default=1e-3)
     p.add_argument('-s', '--smoothness', type=int, default=100)
     p.add_argument('-a', '--alpha', type=float, default=0.1)
     p.add_argument('-v', '--verbose', action="store_true", default=False)
     p.add_argument('-i', '--info',required=True)
+    p.add_argument('-x', '--trunc', type=int, default=0)
 
     args = p.parse_args()
 
     data_dict = np.load(args.data)         # contain ['indices','vals','size'] as keys
     ind_tup = (data_dict['indices'][0].tolist(),data_dict['indices'][1].tolist())
-    val_tup = (data_dict['vals'].tolist())
+    val_tup = data_dict['vals']
+    
+    if args.trunc != 0:
+        val_tup = np.where(val_tup>args.trunc, args.trunc, val_tup)
+    val_tup = val_tup.tolist()    
+
     data = skt.sptensor(ind_tup,val_tup,shape= data_dict['size'].tolist(), dtype=np.int32)
     print("Number of non-zero entries = %d"%(len(data.vals)))
     del ind_tup

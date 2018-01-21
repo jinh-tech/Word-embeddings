@@ -1,36 +1,54 @@
 import argparse
 import numpy as np
+import re
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--vocab_file', default='vocab.txt', type=str)
-    parser.add_argument('--vectors_file', default='vectors.txt', type=str)
+    parser.add_argument('--vocab_file', required=True, type=str)
+    parser.add_argument('--vectors_file', required=True, type=str)
+    parser.add_argument('--write_out',type=str,default='False')
     args = parser.parse_args()
 
+
     with open(args.vocab_file, 'r') as f:
-        words = [x.rstrip().split(' ')[0] for x in f.readlines()]
-    with open(args.vectors_file, 'r') as f:
-        vectors = {}
-        for line in f:
-            vals = line.rstrip().split(' ')
-            vectors[vals[0]] = [float(x) for x in vals[1:]]
+        words= []
+        vocab = {}
+        ivocab = {}
+        for x in f.readlines():
+            x = x.split(' ')
+            words.append(x[0])
+            vocab[x[0]] = int(x[1])
+            ivocab[int(x[1])] = x[0]
 
-    vocab_size = len(words)
-    vocab = {w: idx for idx, w in enumerate(words)}
-    ivocab = {idx: w for idx, w in enumerate(words)}
-
-    vector_dim = len(vectors[ivocab[0]])
-    W = np.zeros((vocab_size, vector_dim))
-    for word, v in vectors.items():
-        if word == '<unk>':
-            continue
-        W[vocab[word], :] = v
+    W = np.load(args.vectors_file)['G_DK_M'][0]
+    vocab_size = W.shape[0]
+    vector_dim = W.shape[1]
 
     # normalize each word vector to unit variance
     W_norm = np.zeros(W.shape)
     d = (np.sum(W ** 2, 1) ** (0.5))
     W_norm = (W.T / d).T
-    evaluate_vectors(W_norm, vocab, ivocab)
+    tot_ques, sem_acc, syn_acc, tot_acc = evaluate_vectors(W_norm, vocab, ivocab)
+    
+    if args.write_out != 'False':
+        
+        dataset = re.search(r'^[^/]*/[^_]*_(.*)_top_', args.vectors_file).group(1)
+        vocab = re.search(r'^.*_top_([0-9]*)_w', args.vectors_file).group(1)
+        algo = re.search(r'^[^/]*/([^_]*)_', args.vectors_file).group(1)
+        window = re.search(r'.*_w_([0-9]*)_', args.vectors_file).group(1)
+        v_dim = re.search(r'.*_k_([0-9]*)_', args.vectors_file).group(1)
+        t_val = re.search(r'.*_x_([0-9]*)\.', args.vectors_file).group(1)
+        file_tested = re.search(r'^[^/]*/(.*\.npz)', args.vectors_file).group(1)
+
+        result_file = open('results/word_analogy_results.csv','a')
+        tested_file = open('word_vec/tested.txt','a')
+        
+        result_file.write(algo+', '+dataset+', '+vocab+', '+window+', '+v_dim+', '+t_val+', '+str(tot_ques)+', '+str(sem_acc)+', '+str(syn_acc)+', '+str(tot_acc)+'\n')
+        tested_file.write(file_tested+'\n')
+        result_file.close()
+        tested_file.close()
+
+
 
 def evaluate_vectors(W, vocab, ivocab):
     """Evaluate the trained word vectors on a variety of tasks"""
@@ -42,7 +60,7 @@ def evaluate_vectors(W, vocab, ivocab):
         'gram5-present-participle.txt', 'gram6-nationality-adjective.txt',
         'gram7-past-tense.txt', 'gram8-plural.txt', 'gram9-plural-verbs.txt',
         ]
-    prefix = './eval/question-data/'
+    prefix = 'data/test/word_analogy/'
 
     # to avoid memory overflow, could be increased/decreased
     # depending on system and vocab size
@@ -104,7 +122,7 @@ def evaluate_vectors(W, vocab, ivocab):
     print('Syntactic accuracy: %.2f%%  (%i/%i)' %
         (100 * correct_syn / float(count_syn), correct_syn, count_syn))
     print('Total accuracy: %.2f%%  (%i/%i)' % (100 * correct_tot / float(count_tot), correct_tot, count_tot))
-
+    return count_tot, 100 * correct_sem / float(count_sem), 100 * correct_syn / float(count_syn), 100 * correct_tot / float(count_tot)
 
 if __name__ == "__main__":
     main()

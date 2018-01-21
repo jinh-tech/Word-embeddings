@@ -17,7 +17,6 @@ class BPTF(BaseEstimator, TransformerMixin):
     def __init__(self, n_modes, n_components,  max_iter, tol,
                  smoothness, verbose, alpha):
         self.n_modes = n_modes-1
-        print "LOL %d"%self.n_modes
         self.n_components = n_components
         self.max_iter = max_iter
         self.tol = tol
@@ -103,8 +102,8 @@ class BPTF(BaseEstimator, TransformerMixin):
                 print 'ITERATION %d:    Time: %f   Objective: %.2f    Change: %.5f'% (itn, e, bound, delta)
 
             curr_elbo = bound
-            # if delta < self.tol:
-            #     break
+            if delta < self.tol:
+                break
 
     def fit(self, data):
         self._init_all_components(data.shape)
@@ -122,7 +121,7 @@ def main():
     p.add_argument('-o', '--out', type=path, required=True)
     p.add_argument('-k', '--n_components', type=int, required=True)
     p.add_argument('-n', '--max_iter', type=int, default=200)
-    p.add_argument('-t', '--tol', type=float, default=1e-4)
+    p.add_argument('-t', '--tol', type=float, default=1e-3)
     p.add_argument('-s', '--smoothness', type=int, default=100)
     p.add_argument('-a', '--alpha', type=float, default=0.1)
     p.add_argument('-v', '--verbose', action="store_true", default=False)
