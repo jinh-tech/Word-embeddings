@@ -6,7 +6,6 @@ import pickle
 from path import Path as path
 from time import sleep
 
-
 def sp_uttkrp(vals, subs, m, U):
     """Alternative implementation of the sparse version of the uttkrp.
     ----------
@@ -111,10 +110,11 @@ def parafac(matrices, axis=None):
         return np.einsum(s, tmp, matrices[-1])
 
 
-def serialize_bptf(model, out_dir, desc=None):
+def serialize_bptf(model, out_dir, algo_name, desc=None,):
     out_dir = path(out_dir)
     assert out_dir.exists()
 
+    desc = algo_name + "_" + desc
     out_path = out_dir.joinpath('%s.npz' %(desc))
     np.savez(out_path,
              E_DK_M=model.E_DK_M,

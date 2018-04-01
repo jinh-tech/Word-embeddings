@@ -8,10 +8,20 @@ import numpy.random as rn
 import scipy.special as sp
 import sktensor as skt
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.decomposition import NMF
+from scipy.sparse import coo_matrix
 
 from argparse import ArgumentParser
 from utils import *
 
+def second_min(mat):
+
+    a = mat.flatten()
+    m = 100.
+    for i in range(0,a.size):
+        if a[i]!=0.0 and a[i]<m:
+            m = a[i]
+    return m
 
 class BPTF(BaseEstimator, TransformerMixin):
     def __init__(self, n_modes, n_components,  max_iter, tol,
@@ -34,7 +44,29 @@ class BPTF(BaseEstimator, TransformerMixin):
 
         # Inference cache
         self.sumE_MK = np.empty((self.n_modes, self.n_components), dtype=float)
-       
+    
+    def _nndsvd(self,data):
+        
+        X = coo_matrix((data.vals, data.subs), shape=data.shape)
+        model = NMF(verbose=True,n_components=self.n_components, init='nndsvd', random_state=0,max_iter=1)
+        init_matrix = np.empty(self.n_modes, dtype=object)
+        W = model.fit_transform(X)
+        self.G_DK_M[0] = W.copy()
+        self.E_DK_M[0] = W.copy()
+        self.G_DK_M[1] = model.components_.T.copy()
+        self.E_DK_M[1] = model.components_.T.copy()
+        sub_val = min(second_min(W),second_min(model.components_))/40.0
+        print second_min(W),second_min(model.components_)
+        print sub_val
+        self.G_DK_M[0] = np.where(self.G_DK_M[0]==0.0,sub_val,self.G_DK_M[0])
+        self.G_DK_M[1] = np.where(self.G_DK_M[1]==0.0,sub_val,self.G_DK_M[1])
+        self.E_DK_M[0] = np.where(self.E_DK_M[0]==0.0,sub_val,self.E_DK_M[0])
+        self.E_DK_M[1] = np.where(self.E_DK_M[1]==0.0,sub_val,self.E_DK_M[1])
+
+        del X
+        del W
+        del model 
+
     def _reconstruct_nz(self, subs_I_M, G_DK_M):
         """Computes the reconstruction for only non-zero entries."""
         I = len(subs_I_M[0])
@@ -53,14 +85,9 @@ class BPTF(BaseEstimator, TransformerMixin):
     def _init_component(self, m, dim):
         assert self.mode_dims[m] == dim
         K = self.n_components
-        s = self.smoothness
-        gamma_DK = s * rn.gamma(s, 1. / s, size=(dim, K))
-        delta_DK = s * rn.gamma(s, 1. / s, size=(dim, K))
-        self.gamma_DK_M[m] = gamma_DK
-        self.delta_DK_M[m] = delta_DK
-        self.E_DK_M[m] = gamma_DK / delta_DK
+        self.gamma_DK_M[m] = np.empty((dim,K))
+        self.delta_DK_M[m] = np.empty((dim,K))
         self.sumE_MK[m, :] = self.E_DK_M[m].sum(axis=0)
-        self.G_DK_M[m] = np.exp(sp.psi(gamma_DK) - np.log(delta_DK))
         self.beta_M[m] = 1. / self.E_DK_M[m].mean()
 
     def _check_component(self, m):
@@ -118,7 +145,8 @@ class BPTF(BaseEstimator, TransformerMixin):
             #    break
 
     def fit(self, data,test_times=None,orig_data=None,mask_no=None,bool_test=False):
-        assert data.ndim == self.n_modes
+
+        self._nndsvd(data)
         self._init_all_components(data.shape)
         self._update(data,orig_data,None,mask_no)
         return self
@@ -176,7 +204,7 @@ def main():
     bptf.fit(data)
     e = time.time()
     print "Training time = %d"%(e-s)
-    serialize_bptf(bptf, args.out, desc=args.info,algo_name="bpf")
+    serialize_bptf(bptf, args.out, desc=args.info,algo_name="svd-bpf")
 
 
 if __name__ == '__main__':

@@ -20,13 +20,13 @@ def main():
             vocab[x[0]] = int(x[1])
             ivocab[int(x[1])] = x[0]
 
-    W = np.load(args.vectors_file)['E_DK_M'][0]
+    W = np.load(args.vectors_file)['G_DK_M'][0]
     vocab_size = W.shape[0]
     vector_dim = W.shape[1]
 
     # normalize each word vector to unit variance
     W_norm = np.zeros(W.shape)
-    d = (np.sum(W ** 2, 1) ** (0.5))
+    d = np.sum(W**2, 1)**0.5
     W_norm = (W.T / d).T
     tot_ques, sem_acc, syn_acc, tot_acc = evaluate_vectors(W_norm, vocab, ivocab)
     
@@ -91,15 +91,20 @@ def evaluate_vectors(W, vocab, ivocab):
             pred_vec = (W[ind2[subset], :] - W[ind1[subset], :]
                 +  W[ind3[subset], :])
             #cosine similarity if input W has been normalized
-            dist = np.dot(W, pred_vec.T)
+            # dist = np.dot(W, pred_vec.T)
+            # print dist.shape
+            dist = np.zeros((W.shape[0],len(subset)))
+            for k in range(W.shape[0]):
+                for j in range(len(subset)):
+                    dist[k,j] = ((W[k]-pred_vec[j])**2).sum()
 
             for k in range(len(subset)):
-                dist[ind1[subset[k]], k] = -np.Inf
-                dist[ind2[subset[k]], k] = -np.Inf
-                dist[ind3[subset[k]], k] = -np.Inf
+                dist[ind1[subset[k]], k] = np.Inf
+                dist[ind2[subset[k]], k] = np.Inf
+                dist[ind3[subset[k]], k] = np.Inf
 
             # predicted word index
-            predictions[subset] = np.argmax(dist, 0).flatten()
+            predictions[subset] = np.argmin(dist, 0).flatten()
 
         val = (ind4 == predictions) # correct predictions
         count_tot = count_tot + len(ind1)

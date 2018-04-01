@@ -1,10 +1,10 @@
 import numpy as np
 
 vec_prefix = "../word_vec/"
-vec_file = "text8_top_10000_w_2_k_50.npz"
+vec_file = "hcpf_text8_top_10000_w_2_k_50_x_0.npz"#"hcpf_trial.npz"#
 
 dict_prefix = "../data/train/text8/"
-dict_file = "text 8_top_10000_w_2_dict.txt"
+dict_file = "text8_top_10000_w_2_dict.txt"
 
 top_words = 10
 

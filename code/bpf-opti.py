@@ -16,7 +16,7 @@ from utils import *
 class BPTF(BaseEstimator, TransformerMixin):
     def __init__(self, n_modes, n_components,  max_iter, tol,
                  smoothness, verbose, alpha):
-        self.n_modes = n_modes
+        self.n_modes = n_modes-1
         self.n_components = n_components
         self.max_iter = max_iter
         self.tol = tol
@@ -34,24 +34,16 @@ class BPTF(BaseEstimator, TransformerMixin):
 
         # Inference cache
         self.sumE_MK = np.empty((self.n_modes, self.n_components), dtype=float)
-       
+        
     def _reconstruct_nz(self, subs_I_M, G_DK_M):
         """Computes the reconstruction for only non-zero entries."""
-        I = len(subs_I_M[0])
-        K = self.n_components
-        nz_recon_IK = np.ones((I, K))
-        for m in xrange(self.n_modes):
-            nz_recon_IK *= G_DK_M[m][subs_I_M[m], :]
-        return nz_recon_IK.sum(axis=1)
+        return (G_DK_M[0][subs_I_M[0], :] * G_DK_M[0][subs_I_M[1], :]).sum(axis=1)
 
     def _init_all_components(self, mode_dims):
-        assert len(mode_dims) == self.n_modes
-        self.mode_dims = mode_dims
-        for m, D in enumerate(mode_dims):
-            self._init_component(m, D)
+        self.mode_dims = mode_dims[0]
+        self._init_component(0, self.mode_dims)
 
     def _init_component(self, m, dim):
-        assert self.mode_dims[m] == dim
         K = self.n_components
         s = self.smoothness
         gamma_DK = s * rn.gamma(s, 1. / s, size=(dim, K))
@@ -70,42 +62,35 @@ class BPTF(BaseEstimator, TransformerMixin):
         assert np.isfinite(self.delta_DK_M[m]).all()
 
     def _update_gamma(self, m, data):
-
+        U = np.empty(2,dtype=object)
+        U[0] = np.copy(self.G_DK_M[0])
+        U[1] = np.copy(self.G_DK_M[0])
         tmp = data.vals / self._reconstruct_nz(data.subs,self.G_DK_M)
-        uttkrp_DK = sp_uttkrp(tmp, data.subs, m, self.G_DK_M)
-        self.gamma_DK_M[m][:, :] = self.alpha + self.G_DK_M[m] * uttkrp_DK
+        uttkrp_DK = sp_uttkrp(tmp, data.subs, m, U)
+        del U
+        self.gamma_DK_M[m][:, :] = self.alpha + 2*self.G_DK_M[m] * uttkrp_DK
 
     def _update_delta(self, m):
-        self.sumE_MK[m, :] = 1.
-        uttrkp_DK = self.sumE_MK.prod(axis=0)
-        self.delta_DK_M[m][:, :] = self.alpha * self.beta_M[m] + uttrkp_DK
+        self.delta_DK_M[m][:, :] = self.beta_M[m] + 2*self.sumE_MK[m,:]
 
     def _update_cache(self, m):
-        gamma_DK = self.gamma_DK_M[m]
-        delta_DK = self.delta_DK_M[m]
-        self.E_DK_M[m] = gamma_DK / delta_DK
+        self.E_DK_M[m] = self.gamma_DK_M[m] / self.delta_DK_M[m]
         self.sumE_MK[m, :] = self.E_DK_M[m].sum(axis=0)
-        self.G_DK_M[m] = np.exp(sp.psi(gamma_DK)- np.log(delta_DK))
+        self.G_DK_M[m] = np.exp(sp.psi(self.gamma_DK_M[m])- np.log(self.delta_DK_M[m]))
 
     def _update_beta(self, m):
         self.beta_M[m] = 1. / self.E_DK_M[m].mean()
 
-    def _update(self, data,orig_data=None ,modes=None, mask_no=None):
-        if modes is not None:
-            modes = list(set(modes))
-        else:
-            modes = range(self.n_modes)
-        assert all(m in range(self.n_modes) for m in modes)
+    def _update(self, data):
 
         curr_elbo = -np.inf
         for itn in xrange(self.max_iter):
             s = time.time()
-            for m in modes:
-                self._update_gamma(m, data)
-                self._update_delta(m)
-                self._update_cache(m)
-                self._update_beta(m)  # must come after cache update!
-                self._check_component(m)
+            self._update_gamma(0, data)
+            self._update_delta(0)
+            self._update_cache(0)
+            self._update_beta(0)  # must come after cache update!
+            self._check_component(0)
 
             bound = self.mae_nz(data)
             delta = (curr_elbo - bound) if itn > 0 else np.nan
@@ -114,26 +99,18 @@ class BPTF(BaseEstimator, TransformerMixin):
                 print 'ITERATION %d:    Time: %f   Objective: %.2f    Change: %.5f'% (itn, e, bound, delta)
 
             curr_elbo = bound
-            #if delta < self.tol:
-            #    break
+            # if delta < self.tol:
+            #     break
 
-    def fit(self, data,test_times=None,orig_data=None,mask_no=None,bool_test=False):
-        assert data.ndim == self.n_modes
+    def fit(self, data):
         self._init_all_components(data.shape)
-        self._update(data,orig_data,None,mask_no)
+        self._update(data)
         return self
 
     def mae_nz(self,data):
 
-        if isinstance(data, skt.dtensor):
-            subs_I_M = data.nonzero()
-            vals_I = data[subs_I_M]
-        elif isinstance(data, skt.sptensor):
-            subs_I_M = data.subs
-            vals_I = data.vals
-        nz_recon_I = self._reconstruct_nz(subs_I_M,self.G_DK_M)
-
-        return ((np.absolute(vals_I-nz_recon_I)).sum())/vals_I.size
+        nz_recon_I = self._reconstruct_nz(data.subs,self.G_DK_M)
+        return ((np.absolute(data.vals-nz_recon_I)).sum())/data.vals.size
 
 def main():
     p = ArgumentParser()
@@ -156,7 +133,7 @@ def main():
     
     if args.trunc != 0:
         val_tup = np.where(val_tup>args.trunc, args.trunc, val_tup)
-    val_tup = val_tup.tolist()    
+    val_tup = val_tup.tolist()
 
     data = skt.sptensor(ind_tup,val_tup,shape= data_dict['size'].tolist(), dtype=np.int32)
     print("Number of non-zero entries = %d"%(len(data.vals)))
@@ -176,7 +153,7 @@ def main():
     bptf.fit(data)
     e = time.time()
     print "Training time = %d"%(e-s)
-    serialize_bptf(bptf, args.out, desc=args.info,algo_name="bpf")
+    serialize_bptf(bptf, args.out, desc=args.info,algo_name="bpf_opti")
 
 
 if __name__ == '__main__':

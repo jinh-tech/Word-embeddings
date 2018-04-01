@@ -1,0 +1,4 @@
+words, window_size, vector_size, trunc_val, semantic_acc, syntactic_acc, total_acc, total_ques_seen
+
+
+

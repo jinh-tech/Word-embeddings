@@ -1,29 +1,23 @@
 import argparse
 import numpy as np
-import re
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--vocab_file', required=True, type=str)
-    parser.add_argument('--vectors_file', required=True, type=str)
-    parser.add_argument('--write_out',type=str,default='False')
+    parser.add_argument('--vocab_file', default='vocab.txt', type=str)
+    parser.add_argument('--vectors_file', default='vectors.txt', type=str)
     args = parser.parse_args()
 
-
     with open(args.vocab_file, 'r') as f:
-        words= []
-        vocab = {}
-        ivocab = {}
-        for x in f.readlines():
-            x = x.split(' ')
-            words.append(x[0])
-            vocab[x[0]] = int(x[1])
-            ivocab[int(x[1])] = x[0]
+        words = [x.rstrip().split(' ')[0] for x in f.readlines()]
+
+    vocab_size = len(words)
+    vocab = {w: idx for idx, w in enumerate(words)}
+    ivocab = {idx: w for idx, w in enumerate(words)}
 
     W = np.load(args.vectors_file)['E_DK_M'][0]
     vocab_size = W.shape[0]
     vector_dim = W.shape[1]
-
+    
     # normalize each word vector to unit variance
     W_norm = np.zeros(W.shape)
     d = (np.sum(W ** 2, 1) ** (0.5))
